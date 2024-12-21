@@ -15,11 +15,13 @@ public class SampleFlatMapRowToJson implements FlatMapFunction<String, String> {
             ObjectMapper objectMapper = new ObjectMapper();
             // Convert JSON string to Map<String, String>
             try {
-                Map<String, String> map = objectMapper.readValue(json, Map.class);
-                Map<String, String> map1 = new HashMap<>(map);
+                Map<String, Object> map = objectMapper.readValue(json, Map.class);
+                Map<String, Object> map1 = new HashMap<>(map);
                 map1.put("id", "k1");
-                Map<String, String> map2 = new HashMap<>(map);
+                map1.put("value", 100);
+                Map<String, Object> map2 = new HashMap<>(map);
                 map2.put("id", "k2");
+                map2.put("counter2", 200);
 
                 jsonStrings.add(objectMapper.writeValueAsString(map1));
                 jsonStrings.add(objectMapper.writeValueAsString(map2));
