@@ -1,38 +1,45 @@
 package org.example.ontology;
 
-import org.apache.spark.sql.Column;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-public class OntEvent {
-    private final Map<OntEventProperty, Column> properties;
-    private final List<OntObject> objects;
+public class OntEvent implements Normalize{
+
+    private final List<OntProperty> properties;
+    private final List<OntEntity> entities;
     private final List<OntRelation> relations;
-    private final OntEventType type;
 
-    public Map<OntEventProperty, Column> getProperties(){
+    public List<OntProperty> getProperties(){
         return properties;
     }
-    private  List<OntObject> getObjects(){
-        return objects;
+    private  List<OntEntity> getEntities(){
+        return entities;
     };
     private List<OntRelation> getRelations(){
         return relations;
     }
-    private final OntEventType getType(){
-        return type;
-    }
     public OntEvent(
-            OntEventType type,
-            Map<OntEventProperty, Column> properties,
-                    List<OntObject> objects,
+            List<OntProperty> properties,
+                    List<OntEntity> objects,
                     List<OntRelation> relations){
         this.properties = properties;
-        this.objects = objects;
+        this.entities = objects;
         this.relations = relations;
-        this.type = type;
     }
+    @Override
+    public Dataset<Row> normalize(Dataset<Row> data){
+        for(OntEntity entity: entities){
+            data = entity.normalize(data);
+        }
+        for(OntRelation relation: relations){
+            data = relation.normalize(data);
+        }
+        for(OntProperty p: properties){
+            data = p.normalize(data);
+        }
+        return data;
+    }
+
 }

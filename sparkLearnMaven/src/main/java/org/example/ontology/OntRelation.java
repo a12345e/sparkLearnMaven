@@ -1,17 +1,21 @@
 package org.example.ontology;
 
-public class OntRelation {
-    private final OntObject source;
-    private final OntObject destination;
-    private final OntRelationType type;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 
-    public OntObject getSource() { return source;};
-    public OntObject getDestination(){ return destination;};
-    public OntRelationType getType(){ return type;};
-
-    public OntRelation(OntObject source,OntObject destination,OntRelationType type){
+public abstract class OntRelation implements Normalize{
+    private final OntEntity source;
+    private final OntEntity destination;
+    public OntEntity getSource() { return source;};
+    public OntEntity getDestination(){ return destination;};
+    public OntRelation(OntEntity source,OntEntity destination){
         this.source = source;
         this.destination  = destination;
-        this.type = type;
     }
+    public Dataset<Row> normalize(Dataset<Row> data){
+        return data;
+    }
+
+    public abstract OntRole getType();
+
 }
