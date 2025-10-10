@@ -1,31 +1,24 @@
 package org.example.ontology;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
 
-import java.util.List;
+import org.glassfish.jersey.internal.guava.Sets;
 
-public  abstract class OntEntity implements Normalize {
-    private final OntRole role;
-    private final List<OntProperty> properties;
-    public OntRole getRole(){
-        return this.role;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
+public enum OntEntity {
+
+    airplane(new HashSet<>(Arrays.asList(OntProperty.wing, OntProperty.tail, OntProperty.color)),new HashSet<>(Arrays.asList(OntProperty.manufacturer)));
+    final Set<OntProperty> mpSet;
+    final Set<OntProperty> opSet;
+    public Set<OntProperty> getMandatoryProperties(){
+        return mpSet;
     };
-    @Override
-    public Dataset<Row> normalize(Dataset<Row> data){
-        for(OntProperty p: properties){
-            data = p.normalize(data);
-        }
-        return data;
-    }
-
-    public abstract OntEntityType getType();
-
-    public List<OntProperty> getProperties(){
-        return properties;
-    }
-    public OntEntity(OntRole role,
-                    List<OntProperty> properties){
-        this.role = role;
-        this.properties = properties;
+    public Set<OntProperty> getOptionalProperties(){
+        return opSet;
+    };
+    OntEntity(Set<OntProperty> mpSet,Set<OntProperty> opSet ){
+        this.mpSet=mpSet;
+        this.opSet=opSet;
     }
 }

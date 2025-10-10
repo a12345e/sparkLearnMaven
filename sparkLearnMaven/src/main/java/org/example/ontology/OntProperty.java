@@ -1,29 +1,25 @@
 package org.example.ontology;
 
-import org.apache.spark.sql.Column;
-import static org.apache.spark.sql.functions.*;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
+import org.example.ontology.alg.NormalizeProperty;
+import org.example.ontology.alg.StringNormalizer;
+import org.example.ontology.alg.SupportsPropertyNormalizer;
 
+public enum OntProperty implements SupportsPropertyNormalizer {
+    wing(new StringNormalizer()),
+    tail(new StringNormalizer()),
+    color(new StringNormalizer()),
+    manufacturer(new StringNormalizer()),
+    start_time(new StringNormalizer()),
+    time(new StringNormalizer()),
+    end_time(new StringNormalizer());
 
-public abstract class OntProperty implements Normalize{
-    private final Column column;
-    public OntProperty(Column column){
-        this.column = column;
+    final NormalizeProperty normalizer;
+
+    OntProperty(NormalizeProperty normalizer){
+        this.normalizer = normalizer;
     }
     @Override
-    public Dataset<Row> normalize(Dataset<Row> data) {
-        String name = column.expr().toString();
-        StructField field = data.schema().apply(name);
-        if(field.dataType().equals(DataTypes.StringType)){
-            return data.withColumn(name,when(column.equalTo(""), lit(null)).otherwise(column));
-        }else {
-            return data;
-        }
-
+    public NormalizeProperty getPropertyNormalizer() {
+        return normalizer;
     }
-    public abstract OntPropertyType getType();
-
 }
