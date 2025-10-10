@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>sparkLearnMaven</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <properties>
+        <spark.version>3.5.0</spark.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <junit.version>4.12</junit.version>
+        <java.version>1.8</java.version>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+    <dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-all</artifactId>
+            <version>4.1.77.Final</version>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+            <version>1.2.17</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.elasticsearch</groupId>
+            <artifactId>elasticsearch-spark-30_2.12</artifactId>
+            <version>7.13.1</version>
+            <!-- use compile or provided depending on runtime packaging -->
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_2.12</artifactId>
+            <version>3.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-core_2.12</artifactId>
+            <version>3.5.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <!-- Compiler plugin for Java version -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.10.1</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                </configuration>
+            </plugin>
+
+            <!-- Surefire plugin for running tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.1.2</version>
+            </plugin>
+        </plugins>
+    </build>
+    <profiles>
+        <!-- Default: Production -->
+        <profile>
+            <id>prod</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-core_${scala.binary.version}</artifactId>
+                    <version>${spark.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-sql_${scala.binary.version}</artifactId>
+                    <version>${spark.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-catalyst_2.12</artifactId>
+                    <version>3.5.0</version>
+                    <scope>provided</scope>
+                </dependency>
+
+            </dependencies>
+        </profile>
+
+        <!-- Dev/Test: makes Spark visible to IntelliJ & JUnit -->
+        <profile>
+            <id>dev</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-core_${scala.binary.version}</artifactId>
+                    <version>${spark.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-sql_${scala.binary.version}</artifactId>
+                    <version>${spark.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-catalyst_2.12</artifactId>
+                    <version>3.5.0</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+</project>
