@@ -8,21 +8,21 @@ import java.util.stream.Collectors;
 
 public class OntEntityAssign {
     private final OntEntity entity;
-    private final Set<OntPropertyAssign> mAssignSet;
-    private final Set<OntPropertyAssign> oAssignSet;
+    private final Set<OntPropertyAssign> mandatoryAssignSet;
+    private final Set<OntPropertyAssign> optionalAssignSet;
     private final OntRole role;
     public final OntEntity getEntity() { return entity;};
-    public final Set<OntPropertyAssign> getMandatoryPropertiesAssignments() { return mAssignSet;};
-    public final Set<OntPropertyAssign> getOptionalPropertiesAssignments(){return oAssignSet;};
+    public final Set<OntPropertyAssign> getMandatoryPropertiesAssignments() { return mandatoryAssignSet;};
+    public final Set<OntPropertyAssign> getOptionalPropertiesAssignments(){return optionalAssignSet;};
     public OntRole getRole(){ return role;}
 
     public Set<String> getMandatoryColumnNames(){
-        return mAssignSet.stream().map(OntPropertyAssign::getColumnName).collect(Collectors.toSet());
+        return mandatoryAssignSet.stream().map(OntPropertyAssign::getColumnName).collect(Collectors.toSet());
     }
 
     public Set<String> getColumnNames(){
-        Set<String>  columnNames =  mAssignSet.stream().map(OntPropertyAssign::getColumnName).collect(Collectors.toSet());
-        columnNames.addAll(oAssignSet.stream().map(OntPropertyAssign::getColumnName).collect(Collectors.toSet()));
+        Set<String>  columnNames =  mandatoryAssignSet.stream().map(OntPropertyAssign::getColumnName).collect(Collectors.toSet());
+        columnNames.addAll(optionalAssignSet.stream().map(OntPropertyAssign::getColumnName).collect(Collectors.toSet()));
         return columnNames;
     }
 
@@ -38,8 +38,8 @@ public class OntEntityAssign {
             throw new RuntimeException("Defined invalid properties for this entity "+properties);
         }
         this.entity = entity;
-        this.mAssignSet = assignedProperties.stream().filter(x -> entity.getMandatoryProperties().contains(x.getType())).collect(Collectors.toSet());
-        this.oAssignSet = assignedProperties.stream().filter(x -> entity.getOptionalProperties().contains(x.getType())).collect(Collectors.toSet());
+        this.mandatoryAssignSet = assignedProperties.stream().filter(x -> entity.getMandatoryProperties().contains(x.getType())).collect(Collectors.toSet());
+        this.optionalAssignSet = assignedProperties.stream().filter(x -> entity.getOptionalProperties().contains(x.getType())).collect(Collectors.toSet());
         this.role = role;
     }
 }
