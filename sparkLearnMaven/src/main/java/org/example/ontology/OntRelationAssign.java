@@ -30,4 +30,8 @@ public class OntRelationAssign {
         this.type = type;
         this.properties = properties;
     }
+
+    public enum OntRelation {
+        part_of, id_of;
+    }
 }
