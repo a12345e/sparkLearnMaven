@@ -1,0 +1,3 @@
+# Everything here is consumed inside Linux containers. A CRLF entrypoint.sh
+# fails with "bad interpreter", so keep LF endings regardless of core.autocrlf.
+* text=auto eol=lf

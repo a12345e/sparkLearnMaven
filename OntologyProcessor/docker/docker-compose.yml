@@ -1,0 +1,128 @@
+# Hadoop HDFS 3.3.6 + Apache Hive 4.0.0, for local development.
+#
+#   docker compose up -d --build
+#   docker compose exec hiveserver2 beeline -u 'jdbc:hive2://localhost:10000/default'
+#
+# The four Hadoop/Hive services share one image and differ only in the role
+# passed as the command; see scripts/entrypoint.sh.
+
+name: ontology-hadoop-hive
+
+x-hadoop: &hadoop
+  image: ontology/hadoop-hive:${HADOOP_VERSION:-3.3.6}-${HIVE_VERSION:-4.0.0}
+  build:
+    context: .
+    args:
+      HADOOP_VERSION: ${HADOOP_VERSION:-3.3.6}
+      HIVE_VERSION: ${HIVE_VERSION:-4.0.0}
+      TEZ_VERSION: ${TEZ_VERSION:-0.10.3}
+  environment: &hadoop-env
+    TEZ_LOCAL_MODE: ${TEZ_LOCAL_MODE:-true}
+    HADOOP_HEAPSIZE: ${HADOOP_HEAPSIZE:-1024}
+  volumes:
+    - ./conf:/conf:ro
+    - ./scripts:/scripts:ro
+  restart: unless-stopped
+
+services:
+
+  namenode:
+    <<: *hadoop
+    container_name: namenode
+    hostname: namenode
+    command: ["namenode"]
+    ports:
+      - "${NAMENODE_HTTP_PORT:-9870}:9870"   # web UI
+      - "${NAMENODE_RPC_PORT:-8020}:8020"    # fs.defaultFS
+    volumes:
+      - ./conf:/conf:ro
+      - ./scripts:/scripts:ro
+      - namenode-data:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9870/"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  datanode:
+    <<: *hadoop
+    container_name: datanode
+    hostname: datanode
+    command: ["datanode"]
+    ports:
+      - "${DATANODE_HTTP_PORT:-9864}:9864"   # web UI
+    volumes:
+      - ./conf:/conf:ro
+      - ./scripts:/scripts:ro
+      - datanode-data:/hadoop/dfs/data
+    depends_on:
+      namenode:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9864/"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hive-postgres
+    hostname: postgres
+    environment:
+      POSTGRES_DB: metastore
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - metastore-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive -d metastore"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  metastore:
+    <<: *hadoop
+    container_name: hive-metastore
+    hostname: metastore
+    command: ["metastore"]
+    ports:
+      - "${METASTORE_PORT:-9083}:9083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      datanode:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9083"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  hiveserver2:
+    <<: *hadoop
+    container_name: hiveserver2
+    hostname: hiveserver2
+    command: ["hiveserver2"]
+    ports:
+      - "${HIVESERVER2_PORT:-10000}:10000"       # JDBC / thrift
+      - "${HIVESERVER2_WEBUI_PORT:-10002}:10002" # web UI
+    depends_on:
+      metastore:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:10002/"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+
+volumes:
+  namenode-data:
+  datanode-data:
+  metastore-db:
