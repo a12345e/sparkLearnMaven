@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>OntologyProcessor</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>OntologyProcessor</name>
+    <description>Reactor for the ontology ETL modules.</description>
+
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <spark.version>3.5.0</spark.version>
+        <scala.version>2.12</scala.version>
+        <junit.version>4.13.2</junit.version>
+
+        <!-- The external Hadoop/HDFS and Hive system the Hadood module talks to.
+             Keep these in step with the cluster; they are the only place the
+             versions are declared. -->
+        <hadoop.version>3.1.3</hadoop.version>
+        <hive.version>3.1.3</hive.version>
+
+        <!-- The elasticsearch-hadoop Spark connector, matched exactly to the
+             Elasticsearch the docker clusters run. -->
+        <elasticsearch.version>8.19.4</elasticsearch.version>
+    </properties>
+
+    <modules>
+        <!-- The IO contracts come first: they depend on nothing of ours, and
+             the backend modules depend on them. -->
+        <module>IO</module>
+        <module>OntologyExtract</module>
+        <module>OntologyTransform</module>
+        <module>OntologyLoad</module>
+        <module>Hadood</module>
+        <!-- Integration only: drives the docker stacks, never shipped. -->
+        <module>Infra</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Our own IO contracts, for the modules that implement them.
+                 The test-jar carries DataStoreContract, the specification a
+                 backend proves itself against. -->
+            <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>IO</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>IO</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.spark</groupId>
+                <artifactId>spark-core_${scala.version}</artifactId>
+                <version>${spark.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.spark</groupId>
+                <artifactId>spark-sql_${scala.version}</artifactId>
+                <version>${spark.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.spark</groupId>
+                <artifactId>spark-mllib_${scala.version}</artifactId>
+                <version>${spark.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.spark</groupId>
+                <artifactId>spark-streaming_${scala.version}</artifactId>
+                <version>${spark.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.spark</groupId>
+                <artifactId>spark-hive_${scala.version}</artifactId>
+                <version>${spark.version}</version>
+            </dependency>
+
+            <!-- Hadoop/HDFS 3.1.3 client, to match the cluster. hadoop-client-api
+                 carries the unshaded org.apache.hadoop.* surface (hadoop-common
+                 plus the hadoop-hdfs client) and hadoop-client-runtime carries
+                 its relocated third-party jars.
+
+                 Note this pins them *below* the 3.3.4 pair Spark 3.5.0 pulls in
+                 transitively. That keeps one Hadoop version on the classpath
+                 rather than two, which is what matters, but it is a downgrade
+                 of Spark's own dependency rather than an upgrade - so a Spark
+                 upgrade is the thing most likely to break it. -->
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-client-api</artifactId>
+                <version>${hadoop.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-client-runtime</artifactId>
+                <version>${hadoop.version}</version>
+            </dependency>
+            <!-- Unshaded alternatives, pinned so anyone reaching for them gets
+                 the same 3.1.3. Note hadoop-hdfs proper is the *server* (namenode
+                 and datanode, Jetty and JSP included); a client wants
+                 hadoop-hdfs-client. -->
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-common</artifactId>
+                <version>${hadoop.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-hdfs-client</artifactId>
+                <version>${hadoop.version}</version>
+            </dependency>
+
+            <!-- Hive 3.1.3 client, for talking to the external HiveServer2.
+                 Provided: it is the cluster's Hive, not ours to ship.
+
+                 Deliberately NOT managed here: hive-metastore, hive-exec,
+                 hive-serde, hive-common. Spark 3.5.0 embeds Hive 2.3.9 for its
+                 own internals and pulls those in transitively; forcing them to
+                 3.1.3 breaks spark-hive. Spark reaches a 3.1.3 metastore through
+                 spark.sql.hive.metastore.version plus .jars, which load it in an
+                 isolated classloader; see ClusterConfig.
+
+                 3.1.3 is a version Spark 3.5 actually ships a client for - its
+                 isolated loader knows v12 through v3_1 and nothing above. -->
+            <dependency>
+                <groupId>org.apache.hive</groupId>
+                <artifactId>hive-jdbc</artifactId>
+                <version>${hive.version}</version>
+                <scope>provided</scope>
+            </dependency>
+
+            <!-- Spark <-> Elasticsearch. Brings its own shaded HTTP client, so
+                 nothing else needs an Elasticsearch dependency. -->
+            <dependency>
+                <groupId>org.elasticsearch</groupId>
+                <artifactId>elasticsearch-spark-30_${scala.version}</artifactId>
+                <version>${elasticsearch.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

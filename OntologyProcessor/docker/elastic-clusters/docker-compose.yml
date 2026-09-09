@@ -1,0 +1,70 @@
+# One single-node Elasticsearch cluster. Launched once per cluster, as its own
+# compose project, by clusters.ps1 — N clusters means N projects, not N copies
+# of anything in this file.
+#
+#   .\clusters.ps1 up 3      start three clusters
+#   .\clusters.ps1 urls      print their URLs
+#
+# Each project gets its own network, volume and container names for free. The
+# one thing they share is an external network, so that remote reindex can
+# reach across: that runs over HTTP 9200, not the transport port.
+
+services:
+  es:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-8.19.4}
+    hostname: ${CLUSTER_NAME:-es}
+    environment:
+      - cluster.name=${CLUSTER_NAME:-es}
+      - node.name=${CLUSTER_NAME:-es}
+      - discovery.type=single-node
+
+      # A local test sandbox. With security on, ES 8 generates a CA per
+      # cluster, every URL becomes https, and each remote reindex needs the
+      # source cluster's certificate — a lot of ceremony for no benefit here.
+      - xpack.security.enabled=false
+
+      # The destination cluster decides which sources it may pull from, and
+      # this is a static setting: changing it needs a restart, not an API
+      # call. The wildcard lets any cluster in this stack reindex from any
+      # other without re-listing them as you scale N up or down.
+      - reindex.remote.whitelist=${REINDEX_WHITELIST:-es-*:9200}
+
+      # Small on purpose; these are throwaway test clusters.
+      - ES_JAVA_OPTS=-Xms${ES_HEAP:-512m} -Xmx${ES_HEAP:-512m}
+
+      # Without this, a host disk above the flood-stage watermark silently
+      # flips indices to read-only, which reads as a mystery write failure.
+      - cluster.routing.allocation.disk.threshold_enabled=false
+
+    ports:
+      # Host port 0 means "pick a free one". Fixed offsets across N clusters
+      # collide with whatever else is listening; clusters.ps1 asks Docker what
+      # it assigned rather than assuming. Set ES_PORT to pin one.
+      - "${ES_PORT:-0}:9200"
+
+    volumes:
+      - data:/usr/share/elasticsearch/data
+
+    networks:
+      shared:
+        # Compose also attaches the service-name alias "es" here, which every
+        # cluster shares. Always address a cluster by this unique alias.
+        aliases:
+          - ${CLUSTER_NAME:-es}
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS localhost:9200/_cluster/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+    # No container_name: a fixed one would collide across projects.
+
+volumes:
+  data:
+
+networks:
+  shared:
+    external: true
+    name: ${SHARED_NETWORK:-es-shared}

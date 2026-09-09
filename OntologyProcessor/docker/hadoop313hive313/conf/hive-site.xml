@@ -1,0 +1,131 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+
+  <!-- Metastore database -->
+
+  <property>
+    <name>javax.jdo.option.ConnectionURL</name>
+    <value>jdbc:postgresql://postgres:5432/metastore</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionDriverName</name>
+    <value>org.postgresql.Driver</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionUserName</name>
+    <value>hive</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionPassword</name>
+    <value>hive</value>
+  </property>
+
+  <!-- schematool owns the schema; DataNucleus must not improvise. -->
+  <property>
+    <name>datanucleus.schema.autoCreateAll</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hive.metastore.schema.verification</name>
+    <value>true</value>
+  </property>
+
+  <!-- Warehouse and metastore service -->
+
+  <property>
+    <name>hive.metastore.warehouse.dir</name>
+    <value>hdfs://namenode:8020/user/hive/warehouse</value>
+  </property>
+  <property>
+    <name>hive.metastore.uris</name>
+    <value>thrift://metastore:9083</value>
+  </property>
+  <property>
+    <name>metastore.thrift.port</name>
+    <value>9083</value>
+  </property>
+
+  <!-- Unauthenticated stack: without this, the notification API rejects the
+       metastore's own event calls. -->
+  <property>
+    <name>hive.metastore.event.db.notification.api.auth</name>
+    <value>false</value>
+  </property>
+
+  <!-- HiveServer2 -->
+
+  <property>
+    <name>hive.server2.thrift.bind.host</name>
+    <value>0.0.0.0</value>
+  </property>
+  <property>
+    <name>hive.server2.thrift.port</name>
+    <value>10000</value>
+  </property>
+  <property>
+    <name>hive.server2.webui.host</name>
+    <value>0.0.0.0</value>
+  </property>
+  <property>
+    <name>hive.server2.webui.port</name>
+    <value>10002</value>
+  </property>
+
+  <!-- Run queries as the HiveServer2 user rather than the connecting user.
+       Impersonation without Kerberos buys nothing here and costs HDFS
+       permission errors. -->
+  <property>
+    <name>hive.server2.enable.doAs</name>
+    <value>false</value>
+  </property>
+
+  <!-- Execution -->
+
+  <!-- MapReduce, running in-process, because there is no YARN here.
+       Deprecated in Hive 3 and gone in Hive 4, so this is a choice that the
+       version pins rather than one to carry forward.
+
+       Tez does not work in this stack at Hive 3.1.3. Its runtime is installed
+       and tez-site.xml configures local mode, but Hive 3.1.3 derives the split
+       count from the resource Tez advertises, and in local mode that comes back
+       as nonsense - every query dies in FileInputFormat.getSplits with
+       "IllegalArgumentException: Illegal Capacity: -1547". Hive 4.0.0 guards
+       against it, which is why this stack ran on Tez before. Set this to tez
+       only when pointing at a real YARN cluster. -->
+  <property>
+    <name>hive.execution.engine</name>
+    <value>mr</value>
+  </property>
+  <property>
+    <name>hive.exec.scratchdir</name>
+    <value>/tmp/hive</value>
+  </property>
+
+  <!-- Single-container Tez means one session, held for the whole connection. -->
+  <property>
+    <name>hive.server2.tez.initialize.default.sessions</name>
+    <value>false</value>
+  </property>
+
+  <property>
+    <name>hive.support.concurrency</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>hive.txn.manager</name>
+    <value>org.apache.hadoop.hive.ql.lockmgr.DbTxnManager</value>
+  </property>
+
+  <!-- One compactor worker; the default of zero leaves ACID tables
+       uncompacted forever. -->
+  <property>
+    <name>hive.compactor.initiator.on</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>hive.compactor.worker.threads</name>
+    <value>1</value>
+  </property>
+
+</configuration>
