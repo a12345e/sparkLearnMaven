@@ -5,7 +5,7 @@ Infrastructure for an Apache Spark ETL model that is developed **test-first**.
 - **Java:** 8 (`maven.compiler.source/target = 1.8`)
 - **Spark:** 3.5.0 (Scala 2.12 binaries)
 - **Hadoop/HDFS:** 3.1.3 client, **Hive:** 3.1.3 client (the `Hadood` module)
-- **Elasticsearch:** 8.19.4 (the `Infra` module and `docker/elastic-clusters`)
+- **Elasticsearch:** 8.19.4 (the `Infra` module)
 - **Build:** Maven multi-module reactor
 
 ## What this is (and isn't)
@@ -27,6 +27,7 @@ specification rather than by an integration.
 | `OntologyLoad` | `com.example:OntologyLoad` | `Loader` | `Dataset → sink` |
 | `IO` | `com.example:IO` | `DataReader`, `DataWriter`, `DdlOperations`, `DataStore` | named table ↔ `Dataset`, plus DDL |
 | `Hadood` | `com.example:Hadood` | `ClusterConfig` | external file → Hadoop/Spark settings |
+| `Infra` | `com.example:Infra` | `HadoopStack`, `ElasticStack` | docker stacks → endpoints |
 
 **The ETL stage modules are independent** — none depends on another. A pipeline is
 assembled by a caller (today, by a test), not by a compile-time chain:
@@ -232,6 +233,72 @@ named keys, then `hadoop.opt.*`, then `spark.*`.
   through 3.1 and nothing above, so Hive 4 cannot be named here however the
   jars are configured. A newer metastore *server* is fine — Spark only has to
   be able to build a client that can talk to it.
+
+## Local docker stacks (`Infra`)
+
+`Infra` starts the two stacks this project develops against — HDFS + a Hive
+metastore, and 1–6 independent Elasticsearch clusters — and tells you where they
+ended up. Spark always runs **locally**; these are the external systems it talks
+to over published ports.
+
+```java
+HadoopStack hadoop = HadoopStack.packaged();
+hadoop.ensureUp();                      // starts it only if the ports are shut
+
+ElasticStack elastic = ElasticStack.packaged();
+List<String> urls = elastic.ensureUp(1);   // idempotent; already-running clusters are left alone
+```
+
+"Is it up" is answered by probing the ports that actually have to work, not by
+asking docker what it thinks — and Elasticsearch host ports are ephemeral, so
+`url(...)` reads back what docker published rather than assuming a number.
+
+### The compose files ship in the jar
+
+They live in `Infra/src/main/resources/infra/docker/`, which puts them on the
+classpath beside the `infra.docker` package, and `DockerAssets` writes them out
+to `~/.ontology-processor/docker` on first use. `docker compose` cannot read a
+compose file out of a jar, and the hadoop stack bind-mounts `./conf` and
+`./scripts` into its containers, so the files have to be on disk and have to
+outlive the JVM that put them there — which is why it is not a temp directory.
+
+That packaging is what lets **another project** use these stacks. It adds one
+dependency and needs nothing checked out:
+
+```xml
+<dependency>
+  <groupId>com.example</groupId>
+  <artifactId>Infra</artifactId>
+  <scope>test</scope>
+</dependency>
+```
+
+`src/main` versus `src/test` is about who can see the code, not what it is for.
+Everything a consumer references lives in `Infra/src/main`; "only for testing"
+is expressed by that `<scope>test</scope>` at the consumer, so no docker code
+reaches a production classpath. `Infra/src/test` holds only Infra's own tests —
+which double as the worked examples a consumer copies.
+
+Editing a compose file in `src/main/resources` and re-running takes effect:
+Maven copies it to `target/classes` and `DockerAssets` copies it on from there,
+overwriting. To use your own copies instead, and stop it extracting at all:
+
+```
+-Dinfra.docker.dir=<path>
+```
+
+### Production takes the same path
+
+`Infra` never appears in a production run. The difference is one line, because
+both sides build the same config object:
+
+```java
+ClusterConfig cluster = ClusterConfig.load();                                    // prod: external file
+ClusterConfig cluster = ClusterConfig.of(hadoop.clusterProperties(), "docker");  // test: from the container
+```
+
+Everything downstream — the Spark session, the data store — is identical, so the
+tests exercise the real configuration mapping rather than a test-only shortcut.
 
 ## The development loop
 

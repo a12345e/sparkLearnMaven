@@ -144,22 +144,6 @@ public final class Docker {
         }
     }
 
-    /**
-     * @return the OntologyProcessor directory, found by walking up from the
-     *         working directory until the {@code docker/} tree appears
-     */
-    public static File projectRoot() {
-        File dir = new File(System.getProperty("user.dir")).getAbsoluteFile();
-        while (dir != null) {
-            if (new File(dir, "docker/hadoop313hive313/docker-compose.yml").isFile()) {
-                return dir;
-            }
-            dir = dir.getParentFile();
-        }
-        throw new IllegalStateException("could not find the project root (no docker/hadoop313hive313) "
-                + "above " + System.getProperty("user.dir"));
-    }
-
     /** Something to wait for. */
     public interface Ready {
         boolean isReady();

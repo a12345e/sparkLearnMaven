@@ -6,7 +6,7 @@ metastore. Not a production topology: one DataNode, no Kerberos, no YARN.
 ## Start
 
 ```powershell
-cd OntologyProcessor/docker/hadoop313hive313
+cd ~/.ontology-processor/docker/hadoop313hive313   # written there by DockerAssets
 docker compose up -d --build
 ```
 
@@ -26,7 +26,7 @@ docker compose logs -f hiveserver2     # or watch it come up
 | Service | Role | Host ports |
 | --- | --- | --- |
 | `namenode` | HDFS NameNode | 9870 (UI), 8020 (RPC) |
-| `datanode` | HDFS DataNode | 9864 (UI) |
+| `datanode` | HDFS DataNode | 9864 (UI), 9866 (block transfer) |
 | `postgres` | Metastore database | 5432 |
 | `metastore` | Hive Metastore | 9083 (thrift) |
 | `hiveserver2` | HiveServer2 | 10000 (JDBC), 10002 (UI) |
@@ -104,12 +104,37 @@ SparkSession.builder()
     .getOrCreate();
 ```
 
-Two details make this work from outside the compose network:
+Reading or writing a byte needs one more setting, because block IO is a second
+connection. The NameNode only says *which* DataNodes hold the blocks; the
+client then opens its own socket to one of them. So:
 
-- `dfs.client.use.datanode.hostname=true`, so the NameNode hands out
-  `datanode:9864` rather than a container IP. Add `127.0.0.1 datanode namenode`
-  to your hosts file, or run Spark on the compose network.
-- The NameNode binds `0.0.0.0`, so the published ports actually reach it.
+```java
+    .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
+```
+
+Without it a client here dials the DataNode's internal docker IP, which is not
+routable from the host, and the transfer hangs and then fails - *after* the
+NameNode call succeeded, which is why it tends to look like a Spark bug. With
+it the client dials the name the DataNode registered under instead.
+
+That name is `DATANODE_ADVERTISED_HOST` in `.env`, and it is `localhost`, which
+resolves to the published 9866. Nothing needs to go in your hosts file. The
+containers are unaffected: they keep
+`dfs.client.use.datanode.hostname=false` from `conf/hdfs-site.xml` and dial the
+internal IP, so one DataNode serves both networks. Set the variable to
+`datanode` instead if every client of yours runs on the compose network.
+
+`HadoopStack.sparkHadoopOptions()` returns both settings, and
+`HdfsDirectOpsTest` exercises them against the running stack.
+
+Two more details that are already handled:
+
+- The NameNode and the DataNode both bind `0.0.0.0`, so the published ports
+  actually reach them.
+- `docker compose restart datanode` is not enough to pick up a conf change and
+  in fact leaves the container crash-looping on a stale pid file
+  (`datanode is running as process 1. Stop it first.`). Recreate it instead:
+  `docker compose up -d --force-recreate datanode`.
 
 Spark 3.5 ships Hive 2.3.9 metastore client jars, and its isolated client
 loader knows Hive 0.12 through 3.1 — nothing above. Hive 3.1.3 is therefore

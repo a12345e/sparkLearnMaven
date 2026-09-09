@@ -19,6 +19,12 @@ x-hadoop: &hadoop
   environment: &hadoop-env
     TEZ_LOCAL_MODE: ${TEZ_LOCAL_MODE:-true}
     HADOOP_HEAPSIZE: ${HADOOP_HEAPSIZE:-1024}
+    # The name the DataNode registers with the NameNode under. It has to be
+    # set on every role, not just the datanode: hdfs-site.xml is shared, and a
+    # daemon left holding a different value hands clients an address that does
+    # not resolve. Only a client that asks for the hostname ever uses it, so
+    # "localhost" costs the containers nothing - see conf/hdfs-site.xml.
+    DATANODE_ADVERTISED_HOST: ${DATANODE_ADVERTISED_HOST:-localhost}
   volumes:
     - ./conf:/conf:ro
     - ./scripts:/scripts:ro
@@ -52,6 +58,7 @@ services:
     command: ["datanode"]
     ports:
       - "${DATANODE_HTTP_PORT:-9864}:9864"   # web UI
+      - "${DATANODE_DATA_PORT:-9866}:9866"   # block transfer
     volumes:
       - ./conf:/conf:ro
       - ./scripts:/scripts:ro

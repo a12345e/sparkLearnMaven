@@ -1,6 +1,5 @@
 package infra.initialize;
 
-import infra.docker.Docker;
 import infra.docker.ElasticStack;
 import infra.docker.HadoopStack;
 import infra.elastic.ElasticRest;
@@ -35,13 +34,22 @@ import static org.junit.Assert.assertTrue;
  *
  * <h2>Two things this test has to work around</h2>
  *
- * <p><b>The table data is local, not on HDFS.</b> The DataNode publishes only
- * its UI port and registers under the hostname {@code datanode}, which does
- * not resolve on the host, so a local Spark can talk to the NameNode and the
- * metastore but cannot move blocks. The table is therefore created with an
- * explicit local {@code LOCATION}: the real Hive metastore in docker holds the
- * catalog entry, Spark holds the data. {@link HadoopStack#dataNodeHint()} says
- * what to change to lift that.
+ * <p><b>The table data is local, not on HDFS.</b> This test splits the table
+ * in two: the real Hive metastore in docker holds the catalog entry, and the
+ * parquet files sit on local disk, because the table is created with an
+ * explicit local {@code LOCATION}.
+ *
+ * <p>That split used to be forced - the DataNode published only its UI port,
+ * so a Spark session here could reach the NameNode and the metastore but could
+ * not move a block. It is no longer forced: the DataNode publishes 9866 and
+ * registers under a name the host resolves, so HDFS is fully usable from here.
+ * See {@code HdfsDirectOpsTest} for that, and
+ * {@link HadoopStack#sparkHadoopOptions()} for the two settings a session needs
+ * before block IO works.
+ *
+ * <p>The local {@code LOCATION} is kept anyway, because it is what makes this
+ * test worth having as it is: it isolates the metastore. When it passes, the
+ * catalog round trip is proven on its own, with HDFS not in the picture.
  *
  * <p><b>The index is {@code indexa}, not {@code indexA}.</b> Elasticsearch
  * rejects an uppercase character in an index name.
@@ -78,10 +86,8 @@ public class InitializeInfraTest {
 
     @BeforeClass
     public static void startInfrastructure() {
-        File root = Docker.projectRoot();
-
         stage("Hadoop/Hive docker: checking whether it is already up");
-        hadoop = HadoopStack.at(root);
+        hadoop = HadoopStack.packaged();
         if (hadoop.ensureUp()) {
             detail("was down; started it and waited for the namenode and metastore");
         } else {
@@ -95,7 +101,7 @@ public class InitializeInfraTest {
         }
 
         stage("Elasticsearch docker: checking whether one cluster is already up");
-        elastic = ElasticStack.at(root);
+        elastic = ElasticStack.packaged();
         boolean wasRunning = elastic.isRunning(ElasticStack.project(1));
         List<String> urls = elastic.ensureUp(1);
         detail(wasRunning ? "already up" : "was down; started one cluster and waited for it to serve");
@@ -103,7 +109,7 @@ public class InitializeInfraTest {
         es = new ElasticRest(urls.get(0));
 
         stage("Both stacks ready: starting a local Spark session against the Hive metastore");
-        warehouse = new File(root, "Infra/target/warehouse").getAbsoluteFile();
+        warehouse = new File("target/warehouse").getAbsoluteFile();
         spark = SparkSession.builder()
                 .appName("infra-initialize")
                 .master("local[2]")

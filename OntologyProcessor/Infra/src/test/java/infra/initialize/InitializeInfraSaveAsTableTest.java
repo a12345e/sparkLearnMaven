@@ -1,6 +1,5 @@
 package infra.initialize;
 
-import infra.docker.Docker;
 import infra.docker.ElasticStack;
 import infra.docker.HadoopStack;
 import infra.elastic.ElasticRest;
@@ -86,15 +85,13 @@ public class InitializeInfraSaveAsTableTest {
 
     @BeforeClass
     public static void startInfrastructure() {
-        File root = Docker.projectRoot();
-
         stage("Hadoop/Hive docker: checking whether it is already up");
-        hadoop = HadoopStack.at(root);
+        hadoop = HadoopStack.packaged();
         detail(hadoop.ensureUp() ? "was down; started it" : "already up");
         detail("metastore " + hadoop.metastoreUris());
 
         stage("Elasticsearch docker: checking whether one cluster is already up");
-        ElasticStack elastic = ElasticStack.at(root);
+        ElasticStack elastic = ElasticStack.packaged();
         boolean wasRunning = elastic.isRunning(ElasticStack.project(1));
         List<String> urls = elastic.ensureUp(1);
         detail(wasRunning ? "already up" : "was down; started one cluster");
@@ -102,7 +99,7 @@ public class InitializeInfraSaveAsTableTest {
         es = new ElasticRest(urls.get(0));
 
         stage("Both stacks ready: starting a local Spark session against the Hive metastore");
-        warehouse = new File(root, "Infra/target/warehouse").getAbsoluteFile();
+        warehouse = new File("target/warehouse").getAbsoluteFile();
         spark = SparkSession.builder()
                 .appName("infra-initialize-saveastable")
                 .master("local[2]")

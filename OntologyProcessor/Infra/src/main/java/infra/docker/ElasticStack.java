@@ -5,7 +5,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The Elasticsearch clusters in {@code docker/elastic-clusters}.
+ * The Elasticsearch clusters packaged with this module.
+ *
+ * <p>Its compose file ships in the jar; {@link DockerAssets} writes it to disk
+ * on first use.
  *
  * <p>N clusters means N compose projects named {@code es-1}, {@code es-2}, ...
  * off one compose file, which is how that stack is built: each project gets
@@ -28,12 +31,17 @@ public final class ElasticStack {
         this.composeDir = composeDir;
     }
 
-    public static ElasticStack at(File projectRoot) {
-        File dir = new File(projectRoot, "docker/elastic-clusters");
-        if (!new File(dir, "docker-compose.yml").isFile()) {
-            throw new IllegalStateException("no docker-compose.yml in " + dir.getAbsolutePath());
+    /** The clusters packaged in this jar. */
+    public static ElasticStack packaged() {
+        return at(DockerAssets.elasticClusters());
+    }
+
+    /** Clusters whose compose file you keep yourself. */
+    public static ElasticStack at(File composeDir) {
+        if (!new File(composeDir, "docker-compose.yml").isFile()) {
+            throw new IllegalStateException("no docker-compose.yml in " + composeDir.getAbsolutePath());
         }
-        return new ElasticStack(dir);
+        return new ElasticStack(composeDir);
     }
 
     /** @return the compose project name of the nth cluster, counting from 1 */
