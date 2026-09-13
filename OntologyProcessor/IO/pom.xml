@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.example</groupId>
+        <artifactId>OntologyProcessor</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>IO</artifactId>
+
+    <name>IO</name>
+    <description>IO contracts: read, write and DDL, for storage backends to implement.</description>
+
+    <dependencies>
+        <!-- Spark only. A backend's own client - Hadoop/Hive today,
+             Elasticsearch later - belongs in the module implementing this
+             contract, never here: an interface that dragged in a client would
+             force every implementation to carry every other backend. -->
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_${scala.version}</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Publish the test tree as well. DataStoreContract is the written
+                 specification of a DataStore, and a backend module inherits it
+                 by depending on this artifact with <type>test-jar</type>; the
+                 in-memory store here and a real Hive or Elasticsearch store
+                 then answer the same tests. Version pinned so the build does
+                 not depend on Maven's default. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <executions>
+                    <execution>
+                        <id>test-jar</id>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

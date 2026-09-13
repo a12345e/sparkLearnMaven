@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+
+  <!-- In Hive 4 the old Hive CLI is gone: `hive` is Beeline, and with no URL
+       it opens a prompt with "No current connection". Naming a default URL
+       here makes a bare `hive` or `beeline` connect to HiveServer2, from any
+       container in the stack. -->
+
+  <property>
+    <name>beeline.hs2.jdbc.url.stack</name>
+    <value>jdbc:hive2://hiveserver2:10000/default</value>
+  </property>
+
+  <property>
+    <name>beeline.hs2.jdbc.url.default</name>
+    <value>stack</value>
+  </property>
+
+</configuration>

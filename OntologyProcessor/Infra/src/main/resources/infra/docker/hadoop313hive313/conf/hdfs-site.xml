@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+
+  <!-- One DataNode, so one replica. -->
+  <property>
+    <name>dfs.replication</name>
+    <value>1</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>file:///hadoop/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file:///hadoop/dfs/data</value>
+  </property>
+
+  <!-- A development stack: no Kerberos, no POSIX permission surprises. -->
+  <property>
+    <name>dfs.permissions.enabled</name>
+    <value>false</value>
+  </property>
+
+  <!-- Bind on every interface so the published ports actually reach the
+       daemons; without this they bind the container's own address only. -->
+  <property>
+    <name>dfs.namenode.rpc-bind-host</name>
+    <value>0.0.0.0</value>
+  </property>
+  <property>
+    <name>dfs.namenode.servicerpc-bind-host</name>
+    <value>0.0.0.0</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-bind-host</name>
+    <value>0.0.0.0</value>
+  </property>
+
+  <!-- Block transfer. The NameNode records BOTH the DataNode's internal IP
+       and the name it registered under, and each client picks which of the two
+       to dial via dfs.client.use.datanode.hostname. That is the hook that lets
+       one DataNode serve two networks at once:
+
+         - in-container clients (hiveserver2, metastore, "hdfs dfs") leave it
+           false and dial the internal IP, which only they can route to;
+         - a Spark job on the host sets it true and gets the registered name.
+
+       So the registered name is what the HOST has to be able to resolve, and
+       DATANODE_ADVERTISED_HOST (see .env) sets it to "localhost" - which the
+       host resolves to the published 9866. Nothing has to go in the Windows
+       hosts file, and the container path is untouched because it never looks
+       the name up. -->
+  <property>
+    <name>dfs.datanode.hostname</name>
+    <value>${env.DATANODE_ADVERTISED_HOST:-datanode}</value>
+  </property>
+  <property>
+    <name>dfs.client.use.datanode.hostname</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>dfs.datanode.use.datanode.hostname</name>
+    <value>false</value>
+  </property>
+
+  <!-- Advertising a hostname must not narrow what the DataNode binds: this
+       stays on every interface so the published port reaches it. -->
+  <property>
+    <name>dfs.datanode.address</name>
+    <value>0.0.0.0:9866</value>
+  </property>
+
+  <property>
+    <name>dfs.webhdfs.enabled</name>
+    <value>true</value>
+  </property>
+
+</configuration>

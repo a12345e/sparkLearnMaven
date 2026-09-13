@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+
+  <!-- @TEZ_LOCAL_MODE@ is substituted from the TEZ_LOCAL_MODE env var at
+       container start (default true). Local mode runs the DAG inside the
+       HiveServer2 JVM, which is what lets this stack work without YARN. -->
+  <property>
+    <name>tez.local.mode</name>
+    <value>@TEZ_LOCAL_MODE@</value>
+  </property>
+
+  <!-- In local mode there is no AM to fetch a session jar tarball from HDFS;
+       the Tez jars shipped in $HIVE_HOME/lib are already on the classpath. -->
+  <property>
+    <name>tez.ignore.lib.uris</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>tez.use.cluster.hadoop-libs</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <name>tez.runtime.optimize.local.fetch</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <name>tez.am.resource.memory.mb</name>
+    <value>1024</value>
+  </property>
+  <property>
+    <name>tez.task.resource.memory.mb</name>
+    <value>1024</value>
+  </property>
+
+</configuration>
