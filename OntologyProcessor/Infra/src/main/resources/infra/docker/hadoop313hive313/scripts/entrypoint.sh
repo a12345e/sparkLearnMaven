@@ -45,6 +45,24 @@ wait_for() {
     log "${name} is up"
 }
 
+# Hadoop refuses to start a daemon whose pid file names a live process:
+#   "namenode is running as process 1. Stop it first."
+# Even in the foreground, `hdfs namenode` goes through hadoop_daemon_handler,
+# which makes that check. The pid file lives in /tmp *inside the container*, so
+# it survives a container restart - and it always says 1, because that is this
+# script. PID 1 is alive again in the restarted container, so the check matches
+# and the daemon exits; with `restart: unless-stopped` that is a crash loop that
+# never resolves. Docker Desktop restarting, or a reboot, is enough to trigger it.
+#
+# The process the file referred to died with the old container, so the file is a
+# leftover rather than a lock, and removing it here is safe: one container runs
+# one daemon, and nothing else can be holding it.
+clear_stale_pids() {
+    local dir=${HADOOP_PID_DIR:-/tmp}
+    log "clearing any pid files left by a previous run in ${dir}"
+    rm -f "${dir}"/hadoop-*.pid "${dir}"/yarn-*.pid "${dir}"/hive-*.pid 2>/dev/null || true
+}
+
 # HDFS scratch and warehouse directories, created once the NameNode is live.
 provision_hdfs() {
     log "provisioning HDFS directories"
@@ -58,6 +76,7 @@ role=${1:-namenode}
 shift || true
 
 install_conf
+clear_stale_pids
 
 case "$role" in
   namenode)

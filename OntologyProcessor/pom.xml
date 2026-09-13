@@ -30,6 +30,12 @@
         <!-- The elasticsearch-hadoop Spark connector, matched exactly to the
              Elasticsearch the docker clusters run. -->
         <elasticsearch.version>8.19.4</elasticsearch.version>
+
+        <!-- Jackson, for reading our own JSON. Pinned to exactly what Spark
+             3.5.0 puts on the classpath: jackson-databind is a single-version
+             dependency in practice, and a second one here would be the kind of
+             split that only shows up at runtime. A Spark upgrade moves this. -->
+        <jackson.version>2.15.2</jackson.version>
     </properties>
 
     <modules>
@@ -149,6 +155,15 @@
                 <groupId>org.elasticsearch</groupId>
                 <artifactId>elasticsearch-spark-30_${scala.version}</artifactId>
                 <version>${elasticsearch.version}</version>
+            </dependency>
+
+            <!-- JSON binding for the ontology data-source definitions. Comes in
+                 transitively with Spark anyway; declared so the version is ours
+                 to see rather than a surprise from the dependency tree. -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
             </dependency>
 
             <dependency>
