@@ -39,6 +39,39 @@ import static org.junit.Assert.assertTrue;
  * mvn -pl Infra test -DskipInfraTests=false -Dtest=UnifiedSchemaRoundTripTest
  * }</pre>
  *
+ * <h2>Where the period type lives</h2>
+ *
+ * <p>This is the part of the schema easiest to get wrong, so the test pins it
+ * down rather than just relying on it.
+ *
+ * <p>{@code period} is <em>only</em> a period start - a timestamp, and nothing
+ * else. It never carries the period type. The type is the <em>second</em>
+ * component of {@code relation}, which is a {@code _}-separated concatenation
+ * of four things:
+ *
+ * <pre>{@code
+ * <directed relation name>_<period type>_<related element>_<relating element>
+ *
+ * called_HOUR_communicationphonemobilemsisdn_entitypersonsubscribername
+ * \____/ \__/ \____________________________/ \________________________/
+ *   |     |                |                              |
+ *   |     |                |                              relating <category><type><subtype><format>
+ *   |     |                related <category><type><subtype><format>
+ *   |     period type
+ *   directed relation name
+ * }</pre>
+ *
+ * <p>The period types are {@code HOUR}, {@code FOURHOUR}, {@code EIGHTHOUR},
+ * {@code DAY}, {@code MONTH}, {@code QUARTER}, {@code HALFYEAR}, {@code YEAR}
+ * and {@code TWOYEARS}. None of them contains an underscore, because the
+ * underscore is what separates the relation's own four components.
+ *
+ * <p>The consequence is worth stating, because it is what the data below is
+ * built to show: <b>a period start does not identify a period</b>. The hourly
+ * rows and the daily row here share the period start {@code 2026010100}, and
+ * only {@code relation} says that one covers an hour and the other a day. A
+ * query that filters on {@code period} alone gets both.
+ *
  * <h2>The three things the schema file cannot be used verbatim for</h2>
  *
  * <p><b>The table name.</b> The file names the real table,
@@ -78,13 +111,48 @@ public class UnifiedSchemaRoundTripTest {
     /** Matches hive.version in the parent POM, and ClusterConfig.HIVE_VERSION. */
     private static final String HIVE_METASTORE_VERSION = "3.1.3";
 
-    /** One hour of phone calls. Two rows land here. */
-    private static final String PERIOD_ONE = "HOUR_2026010100";
+    // ------------------------------------------------ the relation components
 
-    /** The next hour. One row lands here, so the table ends up with two partitions. */
-    private static final String PERIOD_TWO = "HOUR_2026010101";
+    /** The directed relation name - the first component of {@code relation}. */
+    private static final String CALLED = "called";
 
-    private static final String RELATION = "called_HOUR_person_phone";
+    /** Second component of {@code relation}. Never appears in {@code period}. */
+    private static final String HOUR = "HOUR";
+
+    /** The other period type used here, so two of them are in the table at once. */
+    private static final String DAY = "DAY";
+
+    /**
+     * Third component: the related element, {@code <category><type><subtype><format>}.
+     *
+     * <p>A mobile phone number. The schema fixes the shape of an element but not
+     * its vocabulary, so these four parts are this test's own choice.
+     */
+    private static final String PHONE = "communicationphonemobilemsisdn";
+
+    /** Fourth component: the relating element - a named subscriber. */
+    private static final String SUBSCRIBER = "entitypersonsubscribername";
+
+    // -------------------------------------------------------- the period starts
+
+    /**
+     * A period start, and only that.
+     *
+     * <p>Hour resolution, {@code yyyyMMddHH}, the form the schema notes use for
+     * every period type - a month's period start is written to the hour too.
+     */
+    private static final String FIRST_HOUR = "2026010100";
+
+    /** The hour after {@link #FIRST_HOUR}. */
+    private static final String SECOND_HOUR = "2026010101";
+
+    /**
+     * The day that starts at {@link #FIRST_HOUR} - deliberately the same string.
+     *
+     * <p>Nothing distinguishes it from the hourly period start, which is the
+     * point: only {@code relation} carries the period type.
+     */
+    private static final String THE_DAY = FIRST_HOUR;
 
     private static HadoopStack hadoop;
     private static SparkSession spark;
@@ -180,8 +248,10 @@ public class UnifiedSchemaRoundTripTest {
 
         // ---------------------------------------------------------- insert
 
-        stage("Hive: inserting two rows into period " + PERIOD_ONE);
-        spark.sql(insertInto(PERIOD_ONE, "20260101000203",
+        // dt for these two is the exact dt of the source portion, because each
+        // is one hour straight off one source.
+        stage("Hive: two hourly rows into period start " + FIRST_HOUR + ", relation " + relation(HOUR));
+        spark.sql(insertInto(relation(HOUR), FIRST_HOUR, "20260101000203",
                 row("alice", "subscriber", "+972-50-1111111", "msisdn",
                         "2026-01-01 00:00:00", "2026-01-01 01:00:00", 2, 5, "voice",
                         "2026-01-01 00:15:00", "2026-01-01 00:45:00")
@@ -190,35 +260,79 @@ public class UnifiedSchemaRoundTripTest {
                         "2026-01-01 00:00:00", "2026-01-01 01:00:00", 1, 1, "sms",
                         "2026-01-01 00:30:00")));
 
-        stage("Hive: inserting one row into period " + PERIOD_TWO);
-        spark.sql(insertInto(PERIOD_TWO, "20260101010203",
+        stage("Hive: one hourly row into the next period start " + SECOND_HOUR);
+        spark.sql(insertInto(relation(HOUR), SECOND_HOUR, "20260101010203",
                 row("alice", "subscriber", "+972-50-3333333", "msisdn",
                         "2026-01-01 01:00:00", "2026-01-01 02:00:00", 7, 9, "voice",
                         "2026-01-01 01:05:00", "2026-01-01 01:25:00", "2026-01-01 01:55:00")));
 
+        // Same period start as the first insert, different period type. dt is a
+        // creation time here, not a source dt, because this row is a roll-up.
+        stage("Hive: one daily row into period start " + THE_DAY + ", relation " + relation(DAY));
+        spark.sql(insertInto(relation(DAY), THE_DAY, "created_20260102000000",
+                row("alice", "subscriber", "+972-50-1111111", "msisdn",
+                        "2026-01-01 00:00:00", "2026-01-02 00:00:00", 9, 14, "voice",
+                        "2026-01-01 00:15:00", "2026-01-01 01:05:00", "2026-01-01 13:40:00")));
+
         long written = spark.table(QUALIFIED).count();
         detail("rows in the table " + written);
-        assertEquals("rows written", 3L, written);
+        assertEquals("rows written", 4L, written);
 
         stage("Hive: the partitions the inserts created");
         List<Row> partitions = spark.sql("SHOW PARTITIONS " + QUALIFIED).collectAsList();
         for (Row partition : partitions) {
             detail(partition.getString(0));
         }
-        assertEquals("one partition per period", 2, partitions.size());
+        assertEquals("two hourly period starts and one daily one", 3, partitions.size());
+
+        // ------------------------------------------- the period type rule
+
+        stage("Checking the rule: period is a timestamp and nothing else");
+        long notJustATimestamp = spark.sql(
+                "SELECT 1 FROM " + QUALIFIED + " WHERE period RLIKE '[^0-9]'").count();
+        detail("rows whose period is not all digits: " + notJustATimestamp);
+        assertEquals("period must not carry a period type - no HOUR_ or DAY_ on the front",
+                0L, notJustATimestamp);
+
+        stage("Checking the rule: the period type is the second component of relation");
+        List<Row> types = spark.sql(
+                "SELECT DISTINCT split(relation, '_')[1] AS period_type"
+              + "  FROM " + QUALIFIED + " ORDER BY period_type").collectAsList();
+        for (Row type : types) {
+            detail("period type " + type.getString(0));
+        }
+        assertEquals("two period types in the table", 2, types.size());
+        assertEquals("the daily one", DAY, types.get(0).getString(0));
+        assertEquals("the hourly one", HOUR, types.get(1).getString(0));
+
+        stage("Checking the consequence: one period start, two different periods");
+        long samePeriodStart = spark.sql(
+                "SELECT 1 FROM " + QUALIFIED + " WHERE period = '" + FIRST_HOUR + "'").count();
+        detail("rows at period start " + FIRST_HOUR + ": " + samePeriodStart);
+        assertEquals("two hourly rows and the daily roll-up all start here", 3L, samePeriodStart);
+
+        long hourlyOnly = spark.sql(
+                "SELECT 1 FROM " + QUALIFIED
+              + " WHERE period = '" + FIRST_HOUR + "'"
+              + "   AND relation = '" + relation(HOUR) + "'").count();
+        detail("of those, hourly: " + hourlyOnly);
+        assertEquals("the relation is what separates the hour from the day", 2L, hourlyOnly);
 
         // ---------------------------------------------------------- search
 
         stage("Hive: selecting everything, to see what is in there");
         for (Row row : spark.sql("SELECT relating.value, related.value, event.count_lower_bound,"
-                + " event.attributes['channel'], period FROM " + QUALIFIED
-                + " ORDER BY period, related.value").collectAsList()) {
+                + " event.attributes['channel'], split(relation, '_')[1] AS period_type, period"
+                + " FROM " + QUALIFIED
+                + " ORDER BY period_type, period, related.value").collectAsList()) {
             detail(row.toString());
         }
 
         stage("Hive: the search - one partition, and a predicate inside each nested column");
         // Partition columns prune whole directories; the struct and map lookups
-        // are what prove the nested shape survived the parquet round trip.
+        // are what prove the nested shape survived the parquet round trip. The
+        // relation has to be in here, not just the period - without it the daily
+        // roll-up would match too.
         Dataset<Row> found = spark.sql(
                 "SELECT relating.value              AS caller,"
               + "       related.value               AS callee,"
@@ -231,9 +345,9 @@ public class UnifiedSchemaRoundTripTest {
               + "       event.attributes['channel'] AS channel"
               + "  FROM " + QUALIFIED
               + " WHERE related_group = '0'"
-              + "   AND relation      = '" + RELATION + "'"
+              + "   AND relation      = '" + relation(HOUR) + "'"
               + "   AND product       = '1'"
-              + "   AND period        = '" + PERIOD_ONE + "'"
+              + "   AND period        = '" + FIRST_HOUR + "'"
               + "   AND event.attributes['channel'] = 'voice'"
               + "   AND event.count_lower_bound >= 2");
         List<Row> hits = found.collectAsList();
@@ -253,12 +367,27 @@ public class UnifiedSchemaRoundTripTest {
         assertEquals("timestamps in the event set", 2, ((Number) hit.getAs("events")).intValue());
         assertEquals("channel, out of the event attributes map", "voice", hit.getAs("channel"));
 
-        stage("Hive: the same search one hour later, to show the partition really narrows it");
+        stage("Hive: the same search an hour later, to show the period start really narrows it");
         long nextHour = spark.sql("SELECT 1 FROM " + QUALIFIED
-                + " WHERE period = '" + PERIOD_TWO + "'"
+                + " WHERE relation = '" + relation(HOUR) + "'"
+                + "   AND period = '" + SECOND_HOUR + "'"
                 + "   AND event.attributes['channel'] = 'voice'").count();
         detail("rows " + nextHour);
         assertEquals("the third row, on its own", 1L, nextHour);
+
+        stage("Hive: the same hour as a day instead, by changing only the period type");
+        Dataset<Row> daily = spark.sql(
+                "SELECT event.count_lower_bound AS at_least, size(event.events_set) AS events"
+              + "  FROM " + QUALIFIED
+              + " WHERE relation = '" + relation(DAY) + "'"
+              + "   AND period   = '" + THE_DAY + "'");
+        List<Row> dailyRows = daily.collectAsList();
+        for (Row row : dailyRows) {
+            detail(row.toString());
+        }
+        assertEquals("just the roll-up", 1, dailyRows.size());
+        assertEquals("its lower bound covers the whole day",
+                9L, ((Number) dailyRows.get(0).getAs("at_least")).longValue());
 
         // ----------------------------------------------------------- drop
 
@@ -275,7 +404,18 @@ public class UnifiedSchemaRoundTripTest {
         assertFalse("data directory should be gone", data.exists());
         detail("removed " + data);
 
-        stage("Done: created from the schema file, 3 rows in 2 partitions, searched, and removed");
+        stage("Done: created from the schema file, 4 rows in 3 partitions, searched, and removed");
+    }
+
+    /**
+     * A {@code relation} partition value for one period type.
+     *
+     * <p>{@code <directed relation name>_<period type>_<related element>_<relating element>},
+     * which is the only place the period type appears - {@code period} itself is
+     * just a period start.
+     */
+    private static String relation(String periodType) {
+        return CALLED + "_" + periodType + "_" + PHONE + "_" + SUBSCRIBER;
     }
 
     /**
@@ -325,11 +465,16 @@ public class UnifiedSchemaRoundTripTest {
         }
     }
 
-    /** An INSERT naming every partition, for rows built by {@link #row}. */
-    private static String insertInto(String period, String dt, String selects) {
+    /**
+     * An INSERT naming every partition, for rows built by {@link #row}.
+     *
+     * @param relation the full four-component relation, from {@link #relation}
+     * @param period   a period start on its own - never a period type
+     */
+    private static String insertInto(String relation, String period, String dt, String selects) {
         return "INSERT INTO TABLE " + QUALIFIED + " PARTITION ("
              + "related_group = '0',"
-             + "relation      = '" + RELATION + "',"
+             + "relation      = '" + relation + "',"
              + "product       = '1',"
              + "period        = '" + period + "',"
              + "dt            = '" + dt + "')"
